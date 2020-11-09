@@ -1,6 +1,9 @@
 #include "ecmascript_language.h"
 #include "core/class_db.h"
 #include "core/os/file_access.h"
+#include "editor/plugins/script_editor_plugin.h"
+#include "core/os/os.cpp"
+#include "core/io/json.h"
 ECMAScriptLanguage *ECMAScriptLanguage::singleton = NULL;
 
 void ECMAScriptLanguage::init() {
@@ -219,6 +222,105 @@ void ECMAScriptLanguage::reload_all_scripts() {
 		reload_script(E->get(), true);
 	}
 #endif
+}
+
+/** If trying to open a .jsx class with an external editor, and we detect a .tsx it's compiled from, open that instead */
+Error ECMAScriptLanguage::open_in_external_editor(const Ref<Script>& p_script, int p_line, int p_col) {
+	Ref<ECMAScript> s = p_script;
+	if (s->get_script_path().ends_with(EXT_JSCLASS)) {
+		Error f_err;
+		FileAccessRef f = FileAccess::open("res://tsconfig.json", FileAccess::READ, &f_err);
+		if (!f) {
+			print_line("Failed to read tsconfig.json at project root");
+			return (Error)ERR_UNAVAILABLE;
+		}
+
+		Error json_parse_err;
+		String json = f->get_as_utf8_string();
+		String err_txt;
+		int err_line;
+		Variant parsed_json;
+		json_parse_err = JSON::parse(json, parsed_json, err_txt, err_line);
+		if (json_parse_err != OK) {
+			print_error("Failed parsing tsconfig.json");
+			return (Error)ERR_UNAVAILABLE;
+		}
+
+		String ts_root_dir = parsed_json.get("compilerOptions").get("rootDir");
+		ts_root_dir = ts_root_dir.replace_first(".", "");
+		String ts_out_dir = parsed_json.get("compilerOptions").get("outDir");
+		ts_out_dir = ts_out_dir.replace_first(".", "");
+
+
+		String tsx_path = s->get_script_path().replacen(EXT_JSCLASS, EXT_TSCLASS);
+		tsx_path = tsx_path.replacen(ts_out_dir, ts_root_dir);
+
+		if (!FileAccess::exists(tsx_path)) {
+			print_line("TSX file doesn't exist at:");
+			print_line(tsx_path);
+			return (Error)ERR_UNAVAILABLE;
+		}
+
+		String path = EditorSettings::get_singleton()->get("text_editor/external/exec_path");
+		String flags = EditorSettings::get_singleton()->get("text_editor/external/exec_flags");
+
+		List<String> args;
+		bool has_file_flag = false;
+		String script_path = ProjectSettings::get_singleton()->globalize_path(tsx_path);
+
+		if (flags.size()) {
+			String project_path = ProjectSettings::get_singleton()->get_resource_path();
+
+			flags = flags.replacen("{line}", itos(p_line > 0 ? p_line : 0));
+			flags = flags.replacen("{col}", itos(p_col));
+			flags = flags.strip_edges().replace("\\\\", "\\");
+
+			int from = 0;
+			int num_chars = 0;
+			bool inside_quotes = false;
+
+			for (int i = 0; i < flags.size(); i++) {
+
+				if (flags[i] == '"' && (!i || flags[i - 1] != '\\')) {
+
+					if (!inside_quotes) {
+						from++;
+					}
+					inside_quotes = !inside_quotes;
+
+				} else if (flags[i] == '\0' || (!inside_quotes && flags[i] == ' ')) {
+
+					String arg = flags.substr(from, num_chars);
+					if (arg.find("{file}") != -1) {
+						has_file_flag = true;
+					}
+
+					// do path replacement here, else there will be issues with spaces and quotes
+					arg = arg.replacen("{project}", project_path);
+					arg = arg.replacen("{file}", script_path);
+					args.push_back(arg);
+
+					from = i + 1;
+					num_chars = 0;
+				} else {
+					num_chars++;
+				}
+			}
+		}
+
+		// Default to passing script path if no {file} flag is specified.
+		if (!has_file_flag) {
+			args.push_back(script_path);
+		}
+
+		Error err = OS::get_singleton()->execute(path, args, false);
+		if (err == OK)
+			return err;
+		WARN_PRINT("Couldn't open external text editor, using internal");
+	}
+
+	
+	return (Error)ERR_UNAVAILABLE;
 }
 
 void ECMAScriptLanguage::reload_script(const Ref<Script> &p_script, bool p_soft_reload) {

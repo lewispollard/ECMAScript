@@ -8,6 +8,7 @@
 #include "scene/resources/text_file.h"
 
 #define EXT_JSCLASS "jsx"
+#define EXT_TSCLASS "tsx"
 #define EXT_JSCLASS_BYTECODE EXT_JSCLASS "b"
 #define EXT_JSCLASS_ENCRYPTED EXT_JSCLASS "e"
 #define EXT_JSMODULE "js"

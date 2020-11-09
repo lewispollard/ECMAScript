@@ -49,7 +49,7 @@ public:
 	_FORCE_INLINE_ virtual bool supports_builtin_mode() const { return false; }
 	_FORCE_INLINE_ virtual bool can_inherit_from_file() { return false; }
 	_FORCE_INLINE_ virtual bool is_using_templates() { return true; }
-	_FORCE_INLINE_ virtual bool overrides_external_editor() { return false; }
+	_FORCE_INLINE_ virtual bool overrides_external_editor() { return true; }
 
 	virtual void init();
 	virtual void finish();
@@ -69,7 +69,7 @@ public:
 
 	/* TODO */ virtual int find_function(const String &p_function, const String &p_code) const { return -1; }
 	/* TODO */ virtual String make_function(const String &p_class, const String &p_name, const PoolStringArray &p_args) const { return ""; }
-	/* TODO */ virtual Error open_in_external_editor(const Ref<Script> &p_script, int p_line, int p_col) { return ERR_UNAVAILABLE; }
+	/* TODO */ virtual Error open_in_external_editor(const Ref<Script> &p_script, int p_line, int p_col);
 
 	/* TODO */ virtual Error complete_code(const String &p_code, const String &p_base_path, Object *p_owner, List<String> *r_options, bool &r_force, String &r_call_hint) { return ERR_UNAVAILABLE; }
 	/* TODO */ virtual Error lookup_code(const String &p_code, const String &p_symbol, const String &p_base_path, Object *p_owner, LookupResult &r_result) { return ERR_UNAVAILABLE; }
